@@ -1,0 +1,162 @@
+@echo off
+chcp 65001
+chcp 936 >nul
+setlocal enabledelayedexpansion
+for /F %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+title JiGuang_D9400+(MT6991Z)_BootLoader_ULOCKING TOOL
+color 0A
+echo ==================================================
+echo     Welcome JiGuang BootLoader_ULOCKING TOOL
+echo     作者：酷安 @AC极光_Official
+echo     核心解锁文件：酷安@道可道official
+echo     QQ:2130275658
+echo     team:233714837
+echo ==================================================
+echo Make sure:
+echo  1. 手机已打开usb调试模式并连接电脑
+echo  2. 电脑已安装 adb 和 fastboot 驱动
+echo.
+pause
+:: 检查 adb 和 fastboot 是否可用
+where adb >nul 2>nul
+if errorlevel 1 (
+    echo [错误] 未找到 adb 命令，请安装并添加到 PATH。
+    pause
+    exit /b 1
+)
+where fastboot >nul 2>nul
+if errorlevel 1 (
+    echo [错误] 未找到 fastboot 命令，请安装并添加到 PATH。
+    pause
+    exit /b 1
+)
+echo=================================================================
+echo \      /\      /                   .
+echo  \    /  \    /  /———l   \/ \/——\  /  \/——\  /———/
+echo   \  /    \  /  /    l   /  /   /  /  /   /  /   /
+echo    \/      \/   \_____\  /  /   /  /  /   /  /___/
+echo                                                  /
+echo                                              ___/
+echo   1.再次强调：解锁 BL 会清空所有数据！            
+echo   2.该解锁方案不可升级系统 升级即回锁 如需线刷 请移除线刷包里的lk分区
+echo   3.如果运行者自身原因导致手机变砖或数据丢失，那就受着
+echo   4.如果不会 可以请求群主远程解锁（不免费）
+echo   5.未经授权禁止二创、去署名、改成恶意脚本、移植其他机型等！
+echo=================================================================
+pause
+echo ==============================
+echo       请选择对应版本
+echo         1.OS2
+echo         2.OS3
+echo ==============================
+:set_version
+set /p choice=请输入对应数字后回车:
+if "%choice%"=="1" (set version=OS2) 
+if "%choice%"=="2" (set version=OS3)
+
+:check_adb
+echo [1] 检查设备链接...
+adb devices
+if errorlevel 1 (
+    echo [错误] 未检测到设备，请检查驱动和数据线。
+    pause
+    goto check_adb
+    exit /b 1
+)
+echo 推送bin文件 
+adb push ./main/%version%/preload.so /data/local/tmp/preload&&adb push ./main/lk.dll /data/local/tmp/lk.img
+if errorlevel 1 (
+    echo 推送bin文件 [失败] 请确保已经开启并允许调试
+    pause
+    goto check_adb
+    exit /b 1    
+)
+:get_root
+echo 设置权限为755
+adb shell chmod 755 /data/local/tmp/preload
+echo 执行宽容ing...
+adb shell "LD_PRELOAD=/data/local/tmp/preload /system/bin/toybox id"
+color 0A
+echo 检查权限
+adb shell su -c "id" > id.txt 2>&1 
+type id.txt
+findstr /ic:"uid=0" id.txt >nul
+if !errorlevel! equ 0 (
+    echo [成功] 已获取 Root 权限
+) else (
+    echo 未获取到 Root [失败] 
+    echo 即将重新获取root
+    pause
+    goto get_root
+)  
+echo 刷入lk_a (1/2)
+adb shell su -c dd if=/data/local/tmp/lk.img of=/dev/block/by-name/lk_a bs=4096
+timeout /t 1 /nobreak >nul
+echo 刷入lk_b (2/2)
+adb shell su -c dd if=/data/local/tmp/lk.img of=/dev/block/by-name/lk_b bs=4096
+timeout /t 1 /nobreak >nul
+  
+echo 正在重启到fastboot 此处请不要动手机 否则将会喜提黑砖
+adb reboot bootloader
+
+echo 等待10秒
+timeout /t 10 /nobreak >nul
+:flash
+echo 检查 Fastboot 设备...
+fastboot devices | find "fastboot" >nul
+if errorlevel 1 (
+    echo [错误] 未检测到 Fastboot 设备，请确保手机已进入 Fastboot 模式并连接电脑。
+    pause
+    goto flash
+    exit /b 1
+)
+fastboot set_active other
+fastboot reboot bootloader
+echo 等待10秒
+timeout /t 10 /nobreak >nul
+
+fastboot getvar unlocked > bl_info.txt 2>&1
+type bl_info.txt
+findstr /ic:"yes" bl_info.txt >nul
+if !errorlevel! equ 0 (
+    echo [提示] 切槽成功 即将进行下一步
+) else (
+    echo [警告] BL未解锁 即将重试
+    pause
+    fastboot reboot
+    timeout /t 5 /nobreak >nul 
+    goto check_adb
+)
+del bl_info.txt
+echo.
+fastboot flash lk_ab ./main/lk.dll
+
+fastboot set_active other
+
+fastboot reboot bootloader
+echo 等待10秒
+timeout /t 10 /nobreak >nul
+
+fastboot getvar product
+fastboot getvar unlocked > bl_info.txt 2>&1
+type bl_info.txt
+findstr /ic:"yes" bl_info.txt >nul
+if !errorlevel! equ 0 (
+    echo [提示] 解锁成功 即将清除数据
+) else (
+    echo [警告] BL未解锁 即将重试
+    timeout /t 5 /nobreak >nul
+    goto flash
+)
+del bl_info.txt
+echo.
+
+fastboot erase frp
+fastboot erase userdata
+fastboot erase metadata
+
+echo 解锁完成
+fastboot reboot 
+echo 祝您玩机顺利 此处脚本已运行完毕 如果不开机请到Recovery清除数据
+pause
+cmd /k
