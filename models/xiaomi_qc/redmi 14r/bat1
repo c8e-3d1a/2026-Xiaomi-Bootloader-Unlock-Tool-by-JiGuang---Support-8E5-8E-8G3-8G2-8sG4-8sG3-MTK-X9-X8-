@@ -1,0 +1,253 @@
+@echo off
+chcp 65001
+chcp 936 >nul
+setlocal enabledelayedexpansion
+for /F %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+title JiGuang_4Gen2(1/2)_BootLoader_ULOCKING TOOL
+color 0A
+
+echo ==================================================
+echo     Welcome JiGuang BootLoader_ULOCKING TOOL
+echo     作者：酷安 @AC极光_Official
+echo     QQ:2130275658
+echo     team:709619081
+echo ==================================================
+
+echo Make sure:
+echo  1. 手机已进入 usb调试模式并连接电脑
+echo  2. 电脑已安装 adb 和 fastboot 驱动
+echo.
+pause
+cls
+
+:: 检查 adb 和 fastboot 是否可用
+where adb >nul 2>nul
+if errorlevel 1 (
+    echo [错误] 未找到 adb 命令，请安装并添加到 PATH。
+    pause
+    exit /b 1
+)
+where fastboot >nul 2>nul
+if errorlevel 1 (
+    echo [错误] 未找到 fastboot 命令，请安装并添加到 PATH。
+    pause
+    exit /b 1
+)
+
+echo ==============================
+echo       %GRN%选择对应版本%RST%
+echo       1.可宽容版本(2月补丁前)(默认)
+echo       2.临时bl模式
+echo       3.OS1模式
+echo ==============================
+
+set /p choice=请输入对应数字后回车: 
+if "%choice%"=="1" (
+    goto set_Permissive
+    )
+if "%choice%"=="2" (
+    goto flash
+    )  
+if "%choice%"=="3" (
+    goto lsROOT
+    ) 
+set "ifFlash="
+set "main="
+echo ================================================
+echo 文件路径:
+echo       %YEL%./main/abl.elf"
+echo       %YEL%./main/facabl.img"
+echo       %YEL%./main/gpt_both4.bin%RST%
+echo       %YEL%./gpt/gpt_both4.bin%RST%
+echo ================================================
+:set_Permissive
+echo [1] 检查 Fastboot 设备...
+fastboot devices | find "fastboot" >nul
+if errorlevel 1 (
+    echo [错误] 未检测到 Fastboot 设备，请确保手机已进入 Fastboot 模式并连接电脑。
+    pause
+    exit /b 1
+)
+echo [成功] 检测到 Fastboot 设备。
+
+echo [2] 发送 fastboot 指令：设置 selinux 为宽容模式...
+fastboot oem set-gpu-preemption 0 androidboot.selinux=permissive
+if errorlevel 1 (
+    echo [警告] fastboot oem 命令可能失败，继续尝试启动...
+) else (
+    echo [成功] 已发送 selinux 宽容模式指令。
+)
+
+echo 发送 fastboot continue 指令...
+fastboot continue
+if errorlevel 1 (
+    echo [错误] fastboot continue 失败，请检查手机状态。
+    pause
+    exit /b 1
+)
+echo [成功] 手机正在重启，请稍候...
+
+echo [3/3] 等待手机启动（约30秒）...
+timeout /t 30 /nobreak >nul
+
+echo 请将手机打开USB调试并允许调试
+adb devices
+if errorlevel 1 (
+    echo [错误] 未检测到设备，请确保手机已打开调试并连接电脑。
+    pause
+    exit /b 1
+) 
+echo 推送abl分区文件 
+adb push ./main/abl.img /data/local/tmp/
+if errorlevel 1 (
+    echo 推送abl分区文件 失败 请确保已经允许调试
+    pause
+    exit /b 1    
+)
+echo 刷入abl_a(1/2)
+adb shell service call  miui.mqsas.IMQSNative 21 i32 1 s16 "dd" i32 1 s16 'if=/data/local/tmp/abl.img of=/dev/block/by-name/abl_a' s16 '/data/mqsas/log.txt' i32 60
+if errorlevel 1 (
+    echo 刷入abl_a 失败 请检查手机状态
+    pause
+    exit /b 1
+)
+echo 刷入abl_b(2/2)
+adb shell service call  miui.mqsas.IMQSNative 21 i32 1 s16 "dd" i32 1 s16 'if=/data/local/tmp/abl.img of=/dev/block/by-name/abl_b' s16 '/data/mqsas/log.txt' i32 60
+if errorlevel 1 (
+    echo 刷入abl_b 失败 请检查手机状态
+    pause
+    exit /b 1
+)
+echo 正在重启到fastboot 此处请不要动手机 否则将会喜提黑砖
+adb reboot bootloader
+echo 等待10秒
+timeout /t 10 /nobreak >nul
+goto flash
+
+:lsROOT
+:: 检查 fastboot 设备
+echo [1/3] 检查 Fastboot 设备...
+fastboot devices | find "fastboot" >nul
+if errorlevel 1 (
+    echo [错误] 未检测到 Fastboot 设备，请确保手机已进入 Fastboot 模式并连接电脑。
+    pause
+    exit /b 1
+)
+echo [成功] 检测到 Fastboot 设备。
+
+:: 执行 fastboot 命令
+echo [2/3] 发送 fastboot 指令：设置 selinux 为宽容模式...
+fastboot oem set-gpu-preemption 0 androidboot.selinux=permissive
+if errorlevel 1 (
+    echo [警告] fastboot oem 命令可能失败，继续尝试启动...
+) else (
+    echo [成功] 已发送 selinux 宽容模式指令。
+)
+
+echo 发送 fastboot continue 指令...
+fastboot continue
+if errorlevel 1 (
+    echo [错误] fastboot continue 失败，请检查手机状态。
+    pause
+    exit /b 1
+)
+echo [成功] 手机正在重启，请稍候...
+
+:: 简单等待手机启动
+echo [3/3] 等待手机启动（约30秒）...
+timeout /t 30 /nobreak >nul
+
+echo 请将手机打开USB调试并允许调试
+adb devices
+if errorlevel 1 (
+    echo [错误] 未检测到设备，请确保手机已打开调试并连接电脑。
+    pause
+    exit /b 1
+)
+echo 推送abl分区文件 
+adb push ./main/abl.img /data/local/tmp/
+if errorlevel 1 (
+    echo 推送abl分区文件 失败 请确保已经允许调试
+    pause
+    exit /b 1    
+)
+echo 安装KSU获取临时Root
+adb install ./ksu.APK
+if errorlevel 1 (
+    echo 安装ksu 失败 请确保已经允许调试
+    pause
+    exit /b 1    
+)
+echo [1]先在KernelSU app里面点击“越狱” 然后点超级用户 给shell授权权限
+echo [2]等会命令行出现“$”时输入：su
+timeout /t 30 /nobreak >nul
+echo [3]出现“#”时依次输入以下代码：
+echo 1：dd if=/data/local/tmp/abl.img of=/dev/block/by-name/abl\_a bs=4096 conv=fsync
+echo 2：dd if=/data/local/tmp/abl.img of=/dev/block/by-name/abl\_b bs=4096 conv=fsync
+echo 检查刷入无误后输入4：reboot bootloader
+
+adb shell
+if errorlevel 1 (
+    echo [错误] 未检测到设备，请确保手机已打开调试并连接电脑。
+    pause
+    exit /b 1
+)
+echo 等待10秒
+timeout /t 10 /nobreak >nul
+goto flash
+
+:flash
+echo [1] 检查 Fastboot 设备...
+fastboot devices
+if errorlevel 1 (
+    echo [错误] 未检测到 Fastboot 设备，请确保手机已进入 Fastboot 模式并连接电脑。
+    pause
+    exit /b 1
+)
+echo [成功] 检测到 Fastboot 设备。
+
+echo 测试fastboot环境
+fastboot erase frp
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 BL未解锁且工程abl已被覆盖
+    pause
+    exit /b 1
+)
+
+echo 刷入破解lun4分区
+fastboot flash partition:4 ./main/gpt_both4.bin
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 您的设备已变砖 请联系售后处理
+    pause
+    exit /b 1
+)   
+echo 执行破解TWRP文件
+fastboot boot ./main/twrp.img
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 您的设备已变砖 请联系售后处理
+    pause
+    exit /b 1
+)   
+echo 恢复原abl文件
+fastboot flash abl_ab ./main/abl.elf
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 您的设备已变砖 请联系售后处理
+    pause
+    exit /b 1
+)   
+fastboot reboot recovery
+echo 此时手机将会进入twrp模式 如果无法进入 则手动电源和减进入 请按照脚本提示操作??
+echo 等待15秒...
+timeout /t 15 /nobreak >nul
+echo 请在TWRP 里: Mount → 勾选 system, vendor, data, cache 全部挂上
+echo 等待你操作10秒...
+timeout /t 15 /nobreak >nul
+
+echo [1]等会命令行出现“$”时输入：su 如果出现“#”时可跳过
+echo [2]出现“#”时依次输入以下代码：
+echo 1：cd /vendor/bin
+echo 2：./qseecomd
+echo [3]卡住就对了 现在去点Unlocking(second).bat??????
+adb shell
+
+pause
