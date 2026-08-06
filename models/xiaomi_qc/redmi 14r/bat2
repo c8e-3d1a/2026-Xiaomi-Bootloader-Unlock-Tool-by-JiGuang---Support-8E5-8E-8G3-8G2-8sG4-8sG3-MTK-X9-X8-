@@ -1,0 +1,65 @@
+@echo off
+chcp 65001
+chcp 936 >nul
+title JiGuang_4Gen2(2/2)_BootLoader_ULOCKING TOOL
+color 0A
+
+echo ==================================================
+echo     Welcome JiGuang BootLoader_ULOCKING TOOL
+echo     作者：酷安 @AC极光_Official
+echo     QQ:2130275658
+echo     team:709619081
+echo ==================================================
+
+adb push ./main/poc /sbin/
+adb shell chmod +x /sbin/poc
+adb shell chmod 0666 /dev/qseecom
+echo [1]等会命令行出现“$”时输入：su 如果出现“#”时可跳过
+echo [2]出现“#”时依次输入以下代码：
+echo 1：./sbin/poc
+echo 如果看到以下反馈：
+echo Current state:
+echo Unlocked: 0
+echo Critical unlocked: 0
+echo Verity mode: 1
+echo ==============================
+echo 输入2：./sbin/poc -w
+echo → 显示Type YES to confirm,??输入大写YES，这样解锁就写入了??
+echo ==============================
+echo 输入3：./sbin/poc
+echo 如果看到以下反馈：
+echo Current state:
+echo Unlocked: 1
+echo Critical unlocked: 1
+echo Verity mode: 1
+echo ==============================
+echo 输入4：reboot bootloader
+echo ==============================
+adb shell
+
+timeout /t 10 /nobreak >nul
+
+echo [1] 检查 Fastboot 设备...
+fastboot devices
+fastboot getvar product
+fastboot getvar unlocked
+echo 如果您看到反馈“yes”字样则说明你的设备解锁成功
+
+echo 恢复官方vbmeta以及 GPT4
+fastboot flash partition:4 ./gpt/gpt_both4.bin&&fastboot flash vbmeta_ab ./main/vbmeta.img&&fastboot flash abl_ab ./main/abl.elf
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 恢复分区失败
+    pause
+    exit /b 1
+)   
+echo 修复完成
+fastboot oem device-info
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 解锁bl失败
+    pause
+    exit /b 1
+)   
+fastboot -w
+fastboot reboot
+echo 解锁完成 祝您玩机顺利 此处脚本已运行完毕 
+pause
