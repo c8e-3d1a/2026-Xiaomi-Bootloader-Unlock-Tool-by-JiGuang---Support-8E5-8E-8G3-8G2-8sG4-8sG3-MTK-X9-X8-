@@ -1,0 +1,408 @@
+@echo off
+chcp 65001
+chcp 936 >nul
+setlocal enabledelayedexpansion
+for /F %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+title JiGuang_8Elite(SM8750)_BootLoader_UNLOCKING TOOL
+color 0A
+echo ==================================================
+echo     Welcome JiGuang BootLoader_UNLOCKING TOOL
+echo     作者：酷安 @AC极光_Official
+echo     QQ:2130275658
+echo     team:626291244
+echo ==================================================
+echo Make sure:
+echo  1. 手机已进入 usb调试模式并连接电脑
+echo  2. 电脑已安装 adb 和 fastboot 驱动
+pause
+echo=================================================================
+echo \      /\      /                   .
+echo  \    /  \    /  /———l   \/ \/——\  /  \/——\  /———/
+echo   \  /    \  /  /    l   /  /   /  /  /   /  /   /
+echo    \/      \/   \_____\  /  /   /  /  /   /  /___/
+echo                                                  /
+echo                                              ___/
+echo   1.再次强调：解锁 BL 会清空所有数据！            
+echo   2.如果运行者自身原因导致手机变砖或数据丢失，那就受着
+echo   3.如果不会 可以请求群主远程解锁（不免费）
+echo   4.未经授权禁止二创、去署名、改成恶意脚本、移植其他机型等！
+echo=================================================================
+pause
+:: 检查 adb 和 fastboot 是否可用
+where adb >nul 2>nul
+if errorlevel 1 (
+    echo [错误] 未找到 adb 检查是否解压完整以及电脑问题
+    pause
+)
+where fastboot >nul 2>nul
+if errorlevel 1 (
+    echo [错误] 未找到 fastboot 检查是否解压完整以及电脑问题
+    color 4A
+    pause
+    exit /b 1
+)
+:cho_ver
+color 0A
+echo ================================================
+echo        请选择对应版本
+echo        1.低版本
+echo        2.高版本
+echo        3.临时bl模式
+echo ================================================
+set /p choice=请输入对应数字后回车: 
+if "%choice%"=="1" (
+    goto set_Permissive
+    )
+if "%choice%"=="2" (
+    set "%version%"=="high"
+    goto check_adb
+    )    
+if "%choice%"=="3" (
+    goto flash
+    )  
+:set_Permissive
+echo [1] 检查 Fastboot 设备...
+fastboot devices | find "fastboot" >nul
+if errorlevel 1 (
+    echo [错误] 未检测到 Fastboot 设备，请确保手机已进入 Fastboot 模式并连接电脑。
+    pause
+    goto set_Permissive
+)
+echo [2] 发送 fastboot 指令：设置 selinux 为宽容模式...
+fastboot oem set-gpu-preemption 0 androidboot.selinux=permissive
+if errorlevel 1 (
+    echo [警告] fastboot oem 命令可能失败，继续尝试启动...
+) else ( echo [成功] 已发送 selinux 宽容模式指令。)
+
+echo 发送 fastboot continue 指令...
+fastboot continue
+if errorlevel 1 (
+    echo [错误] fastboot continue 失败，请检查手机状态。
+    pause
+    goto set_Permissive
+) else (echo [成功] 手机正在重启，请稍候...)
+
+echo [3/3] 等待手机启动（约30秒）...
+timeout /t 30 /nobreak >nul
+:chkadbdev
+echo 请将手机打开USB调试并允许调试
+adb devices | find "device" >nul
+if errorlevel 1 (
+    echo [错误] 未检测到设备，请确保手机已打开调试并连接电脑。
+    pause
+    goto chkadbdev
+)
+echo 自动识别机型
+for /f "delims=" %%i in ('adb shell getprop ro.product.device') do set "device_code=%%i"
+set "product=%device_code:\r=%"
+if "%product%"=="dada" (set "moid=小米15")
+if "%product%"=="haotian" (set "moid=小米15Pro")
+if "%product%"=="xuanyuan" (set "moid=小米15Ultra")
+if "%product%"=="annibale" (set "moid=红米K90")
+if "%product%"=="miro" (set "moid=红米K80Pro")
+if "%product%"=="piano" (set "moid=小米平板8Pro")
+if "%product%"=="bixi" (set "moid=小米MixFlip2")
+if "%product%"=="warsaw" (set "moid=红米K90Ultra")
+echo 您的型号为%moid%-%product%请确认是否一致
+pause
+echo ================================================
+echo 文件路径:
+echo       ./main/%product%/abl.elf"
+echo       ./main/%product%/gpt_both4.bin
+if "%product%"=="piano" (
+echo       ./gpt/gpt_piano.bin
+) else (
+echo       ./gpt/gpt_both4.bin
+)
+echo ================================================
+if "%product%"=="warsaw" (
+echo 版本选错了 滚回去重选!
+color 4A
+pause
+goto cho_ver
+)
+echo 推送abl分区文件 
+adb push ./main/%product%/abl.elf /data/local/tmp/
+if errorlevel 1 (
+    echo 推送abl分区文件 失败 请确保已经允许调试
+    pause
+    goto chkadbdev    
+)
+echo 回读abl
+adb shell service call  miui.mqsas.IMQSNative 21 i32 1 s16 "dd" i32 1 s16 'if=/dev/block/by-name/abl_a of=/sdcard/abl_a.img' s16 '/data/mqsas/log.txt' i32 60
+adb shell service call  miui.mqsas.IMQSNative 21 i32 1 s16 "dd" i32 1 s16 'if=/dev/block/by-name/abl_b of=/sdcard/abl_b.img' s16 '/data/mqsas/log.txt' i32 60
+adb pull /sdcard/abl_a.img ./main/abl_a.img&&adb pull /sdcard/abl_b.img ./main/abl_b.img
+
+echo 刷入abl_a(1/2)
+adb shell service call  miui.mqsas.IMQSNative 21 i32 1 s16 "dd" i32 1 s16 'if=/data/local/tmp/abl.elf of=/dev/block/by-name/abl_a' s16 '/data/mqsas/log.txt' i32 60
+if errorlevel 1 (
+    echo 刷入abl_a 失败 请检查手机状态
+    pause
+    goto chkadbdev
+)
+echo 刷入abl_b(2/2)
+adb shell service call  miui.mqsas.IMQSNative 21 i32 1 s16 "dd" i32 1 s16 'if=/data/local/tmp/abl.elf of=/dev/block/by-name/abl_b' s16 '/data/mqsas/log.txt' i32 60
+if errorlevel 1 (
+    echo 刷入abl_b 失败 请检查手机状态
+    pause
+    goto chkadbdev
+)
+echo 正在重启到fastboot 此处请不要动手机 否则将会喜提黑砖
+adb reboot bootloader
+echo 等待10秒
+timeout /t 10 /nobreak >nul
+goto flash
+
+:check_adb
+echo [1] 检查设备链接...
+adb devices | find "device" >nul
+if errorlevel 1 (
+    echo [错误] 未检测到设备，请检查驱动和数据线
+    pause
+    goto check_adb
+)
+echo 自动识别机型
+for /f "delims=" %%i in ('adb shell getprop ro.product.device') do set "device_code=%%i"
+set "product=%device_code:\r=%"
+if "%product%"=="dada" (set "moid=小米15")
+if "%product%"=="haotian" (set "moid=小米15Pro")
+if "%product%"=="xuanyuan" (set "moid=小米15Ultra")
+if "%product%"=="annibale" (set "moid=红米K90")
+if "%product%"=="miro" (set "moid=红米K80Pro")
+if "%product%"=="piano" (set "moid=小米平板8Pro")
+if "%product%"=="bixi" (set "moid=小米MixFlip2")
+if "%product%"=="warsaw" (set "moid=红米K90Ultra")
+echo 您的型号为%moid%-%product%请确认是否一致
+pause
+echo ================================================
+echo 文件路径:
+echo       ./main/%product%/abl.elf"
+echo       ./main/%product%/gpt_both4.bin
+if "%product%"=="piano" (
+echo       ./gpt/gpt_piano.bin
+) else (
+echo       ./gpt/gpt_both4.bin
+)
+echo ================================================
+if not "%product%"=="warsaw" (
+echo 推送abl分区文件 
+adb push ./main/%product%/abl.elf /data/local/tmp/
+if errorlevel 1 (
+    echo 推送abl分区文件 失败 请确保已经允许调试
+    pause
+    goto check_adb)
+)
+echo 推送bin文件... 
+adb push ./main/%product%/preload.so /data/local/tmp/preload
+if errorlevel 1 (
+    echo 推送bin文件 [失败] 请确保已经开启并允许调试
+    pause
+    goto check_adb    
+)
+:get_root
+echo 设置权限为755
+adb shell chmod 755 /data/local/tmp/preload
+echo 执行宽容...
+adb shell LD_PRELOAD=/data/local/tmp/preload /system/bin/true
+
+echo 检查root权限
+adb shell su -c "id" > id.txt 2>&1 
+type id.txt
+findstr /ic:"uid=0" id.txt >nul
+if !errorlevel! equ 0 (
+    echo [成功] 已获取 Root 权限
+    color 0A
+    del id.txt
+) else (
+    echo 未获取到 Root [失败] 
+    color 4A
+    echo 即将重新获取root
+    pause
+    goto get_root
+)
+if "%product%"=="warsaw" (
+echo 检测启动槽位
+adb shell getprop ro.boot.slot_suffix > temp.txt 2>&1
+type temp.txt
+findstr /ic:"a" temp.txt >nul
+if !errorlevel! equ 0 (
+    echo 校检启动分区 [正确]
+    del temp.txt
+    goto flash_warsaw
+    ) else (
+    echo 校检启动分区 [错误] 
+    echo 请更新系统覆盖完整包后重试
+    color 4A
+    cmd /k
+    )
+)
+if "%product%"=="dada" (set su_addr=/data/local/tmp/) else (
+set su_addr=)
+echo 回读abl
+adb shell "%su_addr%su -c 'dd if=/dev/block/by-name/abl_a of=/sdcard/abl_a.img bs=4096 conv=fsync'"
+adb shell "%su_addr%su -c 'dd if=/dev/block/by-name/abl_b of=/sdcard/abl_b.img bs=4096 conv=fsync'"
+adb pull /sdcard/abl_a.img ./main/abl_a.img&&adb pull /sdcard/abl_b.img ./main/abl_b.img
+:flash_abl
+echo 刷入abl(如果黑屏断联，则上一步宽容失败 重启手机重新打开脚本)
+adb shell "%su_addr%su -c 'dd if=/data/local/tmp/abl.elf of=/dev/block/by-name/abl_a bs=4096 conv=fsync'"
+timeout /t 1 /nobreak >nul
+adb shell "%su_addr%su -c 'dd if=/data/local/tmp/abl.elf of=/dev/block/by-name/abl_b bs=4096 conv=fsync'"
+timeout /t 1 /nobreak >nul
+
+echo 正在重启到fastboot 此处请不要动手机 否则将会喜提黑砖
+adb reboot bootloader
+echo 等待10秒
+timeout /t 10 /nobreak >nul
+goto flash
+:flash_warsaw
+adb push ./main/warsaw/gpt_main4.bin /data/local/tmp/&&adb push ./main/Unlocking-SM8750.img /data/local/tmp/
+if errorlevel 1 (
+    echo 推送bin文件 [失败] 请确保已经开启并允许调试
+    pause
+    goto flash_warsaw    
+)
+echo 回读boot_ab
+adb shell "su -c 'dd if=/dev/block/by-name/boot_a of=/sdcard/boota.img bs=13172 conv=fsync'"
+adb pull /sdcard/boota.img ./main/boota.img
+echo 刷入uefi
+adb shell "su -c 'dd if=/data/local/tmp/Unlocking-SM8750.img of=/dev/block/by-name/boot_b bs=2193 conv=fsync'"
+timeout /t 1 /nobreak >nul
+echo 刷入破解lun4分区
+adb shell "su -c 'dd if=/data/local/tmp/gpt_main4.bin of=/dev/block/sde bs=1'"
+timeout /t 1 /nobreak >nul
+pause
+adb reboot
+goto wait_booting
+:flash
+echo [1] 检查 Fastboot 设备...
+fastboot devices | find "fastboot" >nul
+if errorlevel 1 (
+    echo [错误] 未检测到 Fastboot 设备，请确保手机已进入 Fastboot 模式并连接电脑。
+    pause
+    goto flash
+)
+echo 自动识别机型
+fastboot getvar product > product.txt 2>&1
+type product.txt
+findstr /ic:"dada" product.txt >nul
+if !errorlevel! equ 0 (set "product=dada")
+findstr /ic:"haotian" product.txt >nul
+if !errorlevel! equ 0 (set "product=haotian")
+findstr /ic:"xuanyuan" product.txt >nul
+if !errorlevel! equ 0 (set "product=xuanyuan")
+findstr /ic:"miro" product.txt >nul
+if !errorlevel! equ 0 (set "product=miro")
+findstr /ic:"annibale" product.txt >nul
+if !errorlevel! equ 0 (set "product=annibale")
+findstr /ic:"piano" product.txt >nul
+if !errorlevel! equ 0 (set "product=piano")
+findstr /ic:"bixi" product.txt >nul
+if !errorlevel! equ 0 (set "product=bixi")
+findstr /ic:"warsaw" product.txt >nul
+if !errorlevel! equ 0 (set "product=warsaw")
+
+if "%product%"=="dada" (set "moid=小米15")
+if "%product%"=="haotian" (set "moid=小米15Pro")
+if "%product%"=="xuanyuan" (set "moid=小米15Ultra")
+if "%product%"=="annibale" (set "moid=红米K90")
+if "%product%"=="miro" (set "moid=红米K80Pro")
+if "%product%"=="piano" (set "moid=小米平板8Pro")
+if "%product%"=="bixi" (set "moid=小米MixFlip2")
+if "%product%"=="warsaw" (set "moid=红米K90Ultra")
+echo 您的型号为%moid%-%product%请确认是否一致
+pause
+del product.txt
+if "%product%"=="warsaw" (
+echo 版本选错了 滚回去重选!
+color 4A
+pause
+goto cho_ver
+)
+echo 测试fastboot环境
+fastboot erase frp
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 BL未解锁且工程abl已被覆盖
+    pause
+    fastboot reboot
+    goto cho_ver
+)
+echo 刷入破解lun4分区
+fastboot flash partition:4 ./main/%product%/gpt_both4.bin
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 请检查刷写权限 数据线 电量
+    pause
+    goto flash
+)
+echo 执行破解bl锁文件
+fastboot boot ./main/Unlocking-SM8750.img
+if errorlevel 1 (
+    echo [错误] 请刷降级小包后进fastboot选临时bl模式
+fastboot flash partition:4 ./gpt/gpt_both4.bin
+    pause
+    goto cho_ver
+)   
+:wait_booting
+echo 此时手机将会花屏或黑屏 请等待10s后按电源和音量减强制重启进fastboot链接电脑
+echo 等待20秒
+timeout /t 20 /nobreak >nul
+
+fastboot getvar product
+fastboot getvar unlocked > bl_info.txt 2>&1
+type bl_info.txt
+findstr /ic:"unlocked: yes" bl_info.txt >nul
+if !errorlevel! equ 0 (
+    echo [提示] 解锁成功 即将恢复官方GPT4
+) else (
+    echo [警告] BL未解锁
+    color 4A
+    echo 即将重试解锁
+    timeout /t 5 /nobreak >nul
+    if not "%product%"=="warsaw" (
+      goto flash
+    ) else ( 
+fastboot reboot
+goto wait_booting
+ )
+)
+del bl_info.txt
+:flashogpt4
+if "%product%"=="piano" (
+echo 恢复官方GPT4
+fastboot flash partition:4 ./gpt/gpt_piano.bin
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 恢复gpt4失败
+    pause
+    goto flashogpt4
+    ) else (
+echo 修复分区表完成
+    )
+) else (
+echo 恢复官方GPT4
+fastboot flash partition:4 ./gpt/gpt_both4.bin
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 恢复gpt4失败
+    pause
+    goto flashogpt4
+) else (
+echo 修复分区表完成)
+       )
+       
+if not "%product%"=="warsaw" (
+echo 恢复官方abl
+fastboot flash abl_a ./main/abl_a.img
+fastboot flash abl_b ./main/abl_b.img
+) else (
+fastboot flash boot_a ./main/boota.img
+if errorlevel 1 (
+    echo [错误] Fastboot状态有误 恢复boot失败
+    pause
+    goto flashogpt4 ) else (
+    echo 修复完成)
+)
+fastboot flash misc ./main/misc_wipe.img
+fastboot reboot
+echo 解锁完成 祝您玩机顺利 如果手机无法开机 则需要清除数据/刷系统包
+echo 也可以直接刷官方包和官改 无需手动修复gpt4分区表
+echo 此处脚本已运行完毕
+pause
+cmd /k
